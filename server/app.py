@@ -2,8 +2,9 @@ from flask import Flask, request, jsonify, make_response, json
 from flask_jwt_extended import create_access_token, JWTManager, get_jwt, get_jwt_identity, unset_jwt_cookies, jwt_required
 from datetime import datetime, timedelta, timezone
 from flask_cors import CORS
-from models import db, User
+from models import db, User, Enrollment
 from flask_bcrypt import Bcrypt
+from flask_migrate import Migrate
 from werkzeug.security import check_password_hash
 # import os
 
@@ -16,8 +17,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///user_data.db"
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_ECHO = True
 bcrypt = Bcrypt(app)
+app.json.compact = False
 db.init_app(app)
-CORS(app, supports_credentials=True)
+CORS(app, origins=["https://rayrae511.github.io/testing/"], supports_credentials=True)
+migrate = Migrate(app, db)
 
 with app.app_context():
     db.create_all()
@@ -57,7 +60,10 @@ def login():
         # Print the generated token for debugging
         #print(f"Token generated: {token.decode('utf-8')}")
 
-        return make_response(jsonify({'token': token}), 201)
+        return make_response(jsonify({
+            'token': token,
+            "message": "Logged in successfully"
+            }), 201)
     # returns 403 if the password is wrong
     return make_response(
         'Could not verify',
@@ -90,7 +96,7 @@ def get_admin_data():
     return {'Error 404! Data not found'}, 404
 
 
-@app.route("/Signup", methods=["POST"])
+@app.route("/signup", methods=["POST"])
 def signup():
     email = request.json['email']
     password = request.json['password']
@@ -148,8 +154,42 @@ def logout():
 #
 #    return response_body
 
+@app.route('/enroll', methods=['GET'])
+def get_enrollments():
+    enrollments = Enrollment.query.all()
+    enrollment_data = [
+        {
+            'full_name': enrollment.full_name,
+            'contact': enrollment.contact,
+            'course': enrollment.course,
+            'course_id': enrollment.course_id,
+            'date': enrollment.date
+        }
+        for enrollment in enrollments
+    ]
+    return jsonify(enrollment_data)
 
+@app.route('/enroll', methods=['POST'])
+def create_enrollment():
+    data = request.json
+    full_name = data['full_name']
+    contact = data['contact']
+    course = data['course']
+    course_id = data['course_id']
+    date = data['date']
 
-port_number = 6942
+    enrollment = Enrollment(
+        full_name=full_name,
+        contact=contact,
+        course=course,
+        course_id=course_id,
+        date=date
+    )
+
+    db.session.add(enrollment)
+    db.session.commit()
+
+    return jsonify({'message': 'Enrollment successful'}), 201
+
 if __name__ == "__main__":
-    app.run(debug=True, host='localhost', port=port_number)
+    app.run(debug=True)
